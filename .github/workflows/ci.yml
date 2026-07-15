@@ -31,7 +31,7 @@ jobs:
 
       - name: Check imports are resolvable
         run: |
-          pip install flask pymongo elasticsearch gunicorn flasgger redis flask-cors
+          pip install -r requirements.txt
           python -c "from app.main import create_app; print('imports OK')"
 
   frontend-lint:

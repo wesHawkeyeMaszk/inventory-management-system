@@ -112,7 +112,13 @@ docker-compose up --build -d
 # Mongo/Redis run with auth enforced by default in this compose file (a
 # fixed dev-only password, see docker-compose.yml) - seed_data.py needs
 # the matching credentials to connect.
-pip3 install pymongo elasticsearch
+#
+# Install from requirements.txt, not a bare `pip install pymongo
+# elasticsearch` - the elasticsearch client's wire protocol is pinned to
+# match the server version in docker-compose.yml (elasticsearch:8.13.4).
+# An unpinned install resolves the latest client/transport, which speaks
+# a newer protocol version the pinned server rejects with a 400.
+pip3 install -r requirements.txt
 python3 scripts/seed_data.py --mongo-username admin --mongo-password devpassword
 
 # The API is now available at http://localhost:5000
