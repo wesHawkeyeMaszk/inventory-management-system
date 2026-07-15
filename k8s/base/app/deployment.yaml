@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-app
+  namespace: inventory
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory-app
+  template:
+    metadata:
+      labels:
+        app: inventory-app
+    spec:
+      # Spreads replicas across nodes/zones so a single node loss or AZ
+      # outage doesn't take down every inventory-app pod at once. A no-op
+      # on single-node minikube (ScheduleAnyway keeps scheduling working
+      # when there's nowhere else to spread to); on EKS with nodes across
+      # multiple AZs this is what actually buys the HA the replica count
+      # implies.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: inventory-app
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: inventory-app
+      containers:
+        - name: inventory-app
+          image: inventory-app:latest
+          # Sane general default; the minikube-local workflow (build straight
+          # into minikube's docker daemon, never pull from a registry) is
+          # environment-specific and patched in by overlays/dev - see
+          # k8s/overlays/dev/patch-app.yaml.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            # optional: true means a missing Secret/key leaves API_KEY
+            # unset rather than failing pod creation - write-endpoint auth
+            # (app/auth.py) stays off until k8s/base/app/secret.example.yaml.tpl
+            # is applied for real under this name.
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: inventory-app-secrets
+                  key: api-key
+                  optional: true
+            # All three below are optional: true and absent by default,
+            # exactly like API_KEY - the app connects to Mongo/Redis with
+            # no auth (matching those services' own default-off behaviour
+            # in mongodb/statefulset.yaml and redis/deployment.yaml) until
+            # the matching Secret is created. Same two Secrets (
+            # mongodb-credentials, redis-credentials) are also read by the
+            # data stores themselves - see the comments in each Secret's
+            # .tpl for why.
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: username
+                  optional: true
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: password
+                  optional: true
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+                  optional: true
+          # Required for the HPA in hpa.yaml: averageUtilization is
+          # usage / requests, so without a requests value here the HPA has
+          # no denominator and effectively never scales.
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+          # /health checks Mongo/ES/Redis connectivity - suitable for
+          # readiness (don't route traffic until dependencies are up) but
+          # deliberately not used for liveness, since a downstream outage
+          # shouldn't cause kubelet to restart otherwise-healthy app pods.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3

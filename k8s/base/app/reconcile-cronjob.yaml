@@ -1,0 +1,52 @@
+# Cheap partial mitigation for the Mongo/Elasticsearch drift window
+# documented in docs/adr/0001-mongo-elasticsearch-consistency.md - see
+# scripts/reconcile.py for what this actually checks and repairs, and why
+# it's not a substitute for the Change-Streams-based fix described there.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: inventory-es-reconcile
+  namespace: inventory
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: reconcile
+              image: inventory-app:latest
+              imagePullPolicy: IfNotPresent
+              command: ["python", "scripts/reconcile.py", "--repair"]
+              envFrom:
+                - configMapRef:
+                    name: app-config
+              env:
+                # Same mongodb-credentials Secret the app and mongodb
+                # itself read (see app/deployment.yaml) - optional: true,
+                # absent by default, matching Mongo running with no auth
+                # until that Secret exists.
+                - name: MONGO_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-credentials
+                      key: username
+                      optional: true
+                - name: MONGO_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-credentials
+                      key: password
+                      optional: true
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "128Mi"

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: inventory
+data:
+  MONGO_URI: "mongodb://mongodb:27017/inventory"
+  ES_URI: "http://elasticsearch:9200"
+  REDIS_URI: "redis://redis:6379/0"
+  FLASK_ENV: "production"
+  # A separate logical DB (index 1) from the app cache above (index 0):
+  # rate-limit counters and cached product data are different concerns and
+  # shouldn't share a keyspace. Redis-backed (not the app default of
+  # memory://) because inventory-app runs multiple replicas - in-memory
+  # storage would let each pod enforce its own separate limit instead of
+  # one shared limit across the deployment.
+  RATELIMIT_STORAGE_URI: "redis://redis:6379/1"

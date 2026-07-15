@@ -1,0 +1,12 @@
+# minikube: the environment the main README walks through. This overlay is
+# functionally identical to the manifests as they existed before the
+# base/overlays split - apply with:
+#   kubectl apply -k k8s/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-app.yaml

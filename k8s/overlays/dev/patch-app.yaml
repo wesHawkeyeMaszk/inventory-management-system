@@ -1,0 +1,15 @@
+# Local-cluster-only concern: images are built straight into minikube's
+# docker daemon (eval $(minikube docker-env) && docker build ...), so there
+# is no registry to pull from - kubelet must use the image already sitting
+# on the node.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-app
+  namespace: inventory
+spec:
+  template:
+    spec:
+      containers:
+        - name: inventory-app
+          imagePullPolicy: Never

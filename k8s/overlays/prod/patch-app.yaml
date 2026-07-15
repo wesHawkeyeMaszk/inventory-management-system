@@ -1,0 +1,22 @@
+# Bumped over the base/dev defaults, which are sized for a minikube laptop,
+# not real production traffic - revisit these numbers against actual
+# request-rate/latency data (see monitoring/grafana-dashboard.json) rather
+# than treating them as final.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-app
+  namespace: inventory
+spec:
+  template:
+    spec:
+      containers:
+        - name: inventory-app
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"

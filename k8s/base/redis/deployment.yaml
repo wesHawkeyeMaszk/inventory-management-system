@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: inventory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          env:
+            # Unset by default (optional: true) -> REDIS_PASSWORD is
+            # simply absent from the container's environment, ${VAR:+...}
+            # below expands to nothing, and Redis starts with no auth,
+            # exactly matching this project's previous behaviour, until
+            # redis-credentials is created - see secret.example.yaml.tpl
+            # in this directory.
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+                  optional: true
+          # Redis is used purely as a cache here (see cache_service.py -
+          # every read/write is wrapped in try/except and degrades to a
+          # cache miss on failure), so bound its memory and let it evict
+          # the least-recently-used keys instead of growing unbounded and
+          # risking an OOM-kill, which would drop the pod entirely.
+          #
+          # --requirepass can't be a plain arg the way --maxmemory is: it
+          # would need to embed the secret's value as a literal string in
+          # this manifest, or always be present (breaking the optional/
+          # off-by-default Secret pattern used everywhere else in this
+          # repo). `${VAR:+word}` is shell syntax that expands to `word`
+          # only when VAR is set and non-empty, so this appends
+          # --requirepass only once redis-credentials actually exists.
+          command:
+            - sh
+            - -c
+            - >-
+              exec redis-server
+              --maxmemory 100mb
+              --maxmemory-policy allkeys-lru
+              ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

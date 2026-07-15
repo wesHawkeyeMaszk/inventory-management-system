@@ -1,0 +1,55 @@
+# A StatefulSet, not a Deployment - same reasoning as mongodb/statefulset.yaml:
+# Elasticsearch is stateful (see the volumeMount below) and gets the stable
+# identity a future move to a real multi-node cluster (via ECK, most likely)
+# would build on, rather than a Deployment-on-a-PVC shape that never
+# supported more than one node cleanly to begin with.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: inventory
+spec:
+  serviceName: elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+          ports:
+            - containerPort: 9200
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          # Without this, the index lives only in the container's writable
+          # layer - a pod reschedule (node loss, upgrade, OOM-kill) wipes it
+          # and every product description has to be re-seeded from Mongo.
+          volumeMounts:
+            - name: es-storage
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: es-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
