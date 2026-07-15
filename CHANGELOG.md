@@ -1,5 +1,15 @@
 ## 1.0.0 (2026-07-15)
 
+### Features
+
+* aggregate analytics from Elasticsearch as well as MongoDB ([40fe47a](https://github.com/wesHawkeyeMaszk/inventory-management-system/commit/40fe47a373def58068b2693cd2c1ae9c1c3444a8))
+
+### Bug Fixes
+
+* pin seed/CI installs to requirements.txt for elasticsearch client compat ([2618492](https://github.com/wesHawkeyeMaszk/inventory-management-system/commit/2618492a3a4b862825bc64eed2cd5e730d1c9aa1))
+
+## 1.0.0 (2026-07-15)
+
 ### Bug Fixes
 
 * pin seed/CI installs to requirements.txt for elasticsearch client compat ([f06f8d7](https://github.com/wesHawkeyeMaszk/inventory-management-system/commit/f06f8d7917ce76144ab560bd6493a540ed499486))
