@@ -2,6 +2,8 @@
 
 A REST API for managing product inventory with full-text search and analytics, built with Flask, MongoDB, Elasticsearch, and deployed on Kubernetes.
 
+Built with Claude Code throughout - see [`docs/AI_USAGE.md`](docs/AI_USAGE.md) for how, and [`AGENTS.md`](AGENTS.md) for the guidance an AI agent working in this repo should read first.
+
 ---
 
 ## Architecture
@@ -345,6 +347,8 @@ replacement, External Secrets Operator), and why.
 
 ```
 inventory-system/
+├── AGENTS.md                   # Guidance for AI agents working in this repo (tool-agnostic)
+├── CLAUDE.md                    # Claude Code entry point - points to AGENTS.md
 ├── app/
 │   ├── config.py             # Env-based configuration
 │   ├── main.py               # Flask app factory
@@ -367,6 +371,7 @@ inventory-system/
 ├── terraform/                  # Illustrative EKS + ECR + IRSA - not applied, see terraform/README.md
 ├── docs/
 │   ├── adr/                     # Architecture decision records
+│   ├── AI_USAGE.md              # How AI was used to build and harden this project
 │   └── load-test-results.md    # Real minikube run of the HPA demo below - what scaled, what didn't, why
 ├── monitoring/                 # Starter Grafana dashboard for the /metrics endpoint
 ├── scripts/
