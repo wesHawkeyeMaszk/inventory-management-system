@@ -84,6 +84,42 @@ def suggest_products(q):
     ]
 
 
+def get_analytics():
+    """Total count, category breakdown, and average price computed directly
+    from the Elasticsearch index, independent of Mongo's own aggregation in
+    mongo_service.get_analytics().
+
+    GET /products/analytics merges this in (see app/routes/analytics.py) so
+    the endpoint genuinely aggregates from both stores rather than just
+    Mongo, and so a total-count mismatch between the two surfaces directly
+    in the API response - the same drift ADR 0001 and scripts/reconcile.py
+    already assume is possible, made visible here instead of only caught on
+    reconcile's 15-minute schedule.
+
+    product_category is matched as indexed (no case normalization), unlike
+    Mongo's $toLower grouping - a real difference, not a bug to hide, since
+    it's the same case-sensitivity gap GET /products/search already works
+    around with `case_insensitive: true` on its own category filter.
+    """
+    es = _get_client()
+    response = es.search(
+        index=INDEX,
+        size=0,
+        aggs={
+            "categories": {"terms": {"field": "product_category", "size": 10}},
+            "avg_price": {"avg": {"field": "price"}},
+        },
+    )
+    total = response["hits"]["total"]["value"]
+    buckets = response["aggregations"]["categories"]["buckets"]
+    avg_price = response["aggregations"]["avg_price"]["value"]
+    return {
+        "total_count": total,
+        "average_price": round(avg_price, 2) if avg_price is not None else 0,
+        "category_breakdown": [{"category": b["key"], "count": b["doc_count"]} for b in buckets],
+    }
+
+
 def search_products(query, category=None, min_price=None, max_price=None, page=1, limit=20):
     """Search product name/description, filtered by category and price range,
     with pagination applied in Elasticsearch itself.

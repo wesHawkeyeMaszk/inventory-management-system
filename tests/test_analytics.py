@@ -48,6 +48,37 @@ def test_analytics_groups_categories_case_insensitively(client):
     assert breakdown == {"Electronics": 2, "Books": 1}
 
 
+def test_analytics_includes_elasticsearch_cross_check(client):
+    _create(client, product_category="Electronics", price=100.0)
+    _create(client, product_category="Electronics", price=200.0)
+    _create(client, product_category="Books", price=10.0)
+
+    body = client.get("/products/analytics").get_json()
+
+    es = body["elasticsearch"]
+    assert es["total_count"] == 3
+    assert es["average_price"] == round((100.0 + 200.0 + 10.0) / 3, 2)
+    breakdown = {c["category"]: c["count"] for c in es["category_breakdown"]}
+    assert breakdown == {"Electronics": 2, "Books": 1}
+    assert es["consistent_with_mongo"] is True
+
+
+def test_analytics_flags_drift_between_mongo_and_elasticsearch(client, fake_es):
+    created = _create(client, product_category="Electronics", price=100.0)
+    _create(client, product_category="Books", price=10.0)
+
+    # Simulate drift: a product present in Mongo but missing from the
+    # Elasticsearch index (the exact gap ADR 0001 and reconcile.py exist to
+    # catch and repair).
+    fake_es.delete(index="products", id=created["product_id"])
+
+    body = client.get("/products/analytics").get_json()
+
+    assert body["total_count"] == 2
+    assert body["elasticsearch"]["total_count"] == 1
+    assert body["elasticsearch"]["consistent_with_mongo"] is False
+
+
 def test_analytics_is_cached(client):
     _create(client)
     first = client.get("/products/analytics")

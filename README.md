@@ -301,12 +301,37 @@ Searches `product_name` and `description` in Elasticsearch (fuzzy matching enabl
 ```
 GET /products/analytics
 ```
+Aggregates from both stores, not just MongoDB: the top-level fields
+(`total_count`, `most_popular_category`, `average_price`, `category_breakdown`,
+`min_price`/`max_price`, `low_stock_count`) come from MongoDB, since it's the
+only store with `available_quantity`. The nested `elasticsearch` object is a
+second, independent aggregation computed directly against the Elasticsearch
+index (`es_service.get_analytics`) - its own total/category/price numbers,
+plus `consistent_with_mongo`, which is `false` if the two stores' total
+counts disagree (the same Mongo/Elasticsearch drift [ADR 0001](docs/adr/0001-mongo-elasticsearch-consistency.md)
+and `scripts/reconcile.py` already assume is possible, surfaced here
+directly in the API instead of only caught on reconcile's 15-minute
+schedule). `elasticsearch.category_breakdown` is grouped by category
+as indexed (no case normalization), unlike MongoDB's `$toLower` grouping -
+a real difference worth seeing, not one to hide.
+
 Returns:
 ```json
 {
   "total_count": 12,
   "most_popular_category": "Electronics",
-  "average_price": 81.65
+  "average_price": 81.65,
+  "category_breakdown": [{"category": "Electronics", "count": 5}],
+  "min_price": 9.99,
+  "max_price": 349.99,
+  "low_stock_count": 1,
+  "low_stock_threshold": 10,
+  "elasticsearch": {
+    "total_count": 12,
+    "average_price": 81.65,
+    "category_breakdown": [{"category": "Electronics", "count": 5}],
+    "consistent_with_mongo": true
+  }
 }
 ```
 
@@ -330,6 +355,28 @@ curl "$BASE/products/search?query=laptop"
 
 # Analytics
 curl $BASE/products/analytics
+```
+
+---
+
+## Bonus: "No Profit" (not part of the assignment)
+
+`/game/*` (`app/routes/game.py`, `app/services/game_service.py`,
+`app/models/game.py`) is a small price-guessing game built on top of the
+same product catalog, added purely as personal flavor alongside the
+submission - it isn't part of the assignment's objectives and none of the
+evaluated endpoints depend on it.
+
+Each session deals a pool of products (hidden prices, visible sale/increase
+tags) and a target spend; you submit quantities per product, and the
+session advances to a tighter round if you land within that round's margin,
+tracked on a leaderboard by rounds survived.
+
+```
+POST /game/sessions              # start a session: {"player_name": ..., "pool_size": ...}
+GET  /game/sessions/{session_id}  # current session + round state
+POST /game/sessions/{session_id}/guess  # {"player_name": ..., "guesses": {product_id: quantity}}
+GET  /game/leaderboard            # top runs, ranked by rounds survived
 ```
 
 ---
@@ -362,14 +409,17 @@ inventory-system/
 │   ├── extensions.py          # Shared Flask-Limiter instance
 │   ├── logging_config.py      # Structured JSON logs + request-ID propagation
 │   ├── models/product.py     # Validation and serialization helpers
+│   ├── models/game.py         # "No Profit" game - bonus, not part of the assignment (see below)
 │   ├── routes/
 │   │   ├── products.py       # CRUD + search endpoints
-│   │   ├── analytics.py      # Analytics endpoint
-│   │   └── health.py          # /health (readiness) + /health/live (liveness)
+│   │   ├── analytics.py      # Analytics endpoint (Mongo + Elasticsearch aggregation)
+│   │   ├── health.py          # /health (readiness) + /health/live (liveness)
+│   │   └── game.py            # /game/* - bonus, not part of the assignment (see below)
 │   └── services/
 │       ├── mongo_service.py  # MongoDB CRUD + aggregation + index management
-│       ├── es_service.py     # Elasticsearch indexing + search
-│       └── cache_service.py   # Redis cache wrapper, hit/miss metrics, idempotency-key store
+│       ├── es_service.py     # Elasticsearch indexing + search + analytics aggregation
+│       ├── cache_service.py   # Redis cache wrapper, hit/miss metrics, idempotency-key store
+│       └── game_service.py    # "No Profit" game logic - bonus, not part of the assignment
 ├── k8s/
 │   ├── base/                  # StatefulSets (Mongo/ES), Deployments, Services, HPA, PDB,
 │   │                          # NetworkPolicy, ConfigMap, reconcile CronJob, Secret templates

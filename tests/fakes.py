@@ -44,16 +44,41 @@ class FakeElasticsearch:
             raise NotFoundError(f"{id} not found in {index}")
         del docs[id]
 
-    def search(self, index, query, source=None, size=10, from_=0):
+    def search(self, index, query=None, source=None, size=10, from_=0, aggs=None):
         docs = list(self._docs.get(index, {}).values())
-        matches = [d for d in docs if self._matches(d, query)]
+        matches = docs if query is None else [d for d in docs if self._matches(d, query)]
         total = len(matches)
-        page = matches[from_:from_ + size]
-        hits = []
-        for doc in page:
-            src = doc if source is None else {k: doc.get(k) for k in source}
-            hits.append({"_source": src})
-        return {"hits": {"total": {"value": total}, "hits": hits}}
+
+        result = {"hits": {"total": {"value": total}, "hits": []}}
+        if aggs is not None:
+            result["aggregations"] = self._compute_aggs(matches, aggs)
+        else:
+            page = matches[from_:from_ + size]
+            for doc in page:
+                src = doc if source is None else {k: doc.get(k) for k in source}
+                result["hits"]["hits"].append({"_source": src})
+        return result
+
+    def _compute_aggs(self, docs, aggs):
+        result = {}
+        for name, spec in aggs.items():
+            if "terms" in spec:
+                field = spec["terms"]["field"]
+                size = spec["terms"].get("size", 10)
+                counts = {}
+                for d in docs:
+                    key = d.get(field)
+                    if key is not None:
+                        counts[key] = counts.get(key, 0) + 1
+                buckets = sorted(counts.items(), key=lambda kv: -kv[1])[:size]
+                result[name] = {"buckets": [{"key": k, "doc_count": c} for k, c in buckets]}
+            elif "avg" in spec:
+                field = spec["avg"]["field"]
+                values = [d[field] for d in docs if d.get(field) is not None]
+                result[name] = {"value": (sum(values) / len(values)) if values else None}
+            else:
+                raise NotImplementedError(f"FakeElasticsearch cannot evaluate agg: {spec}")
+        return result
 
     def _matches(self, doc, query):
         if "match_phrase_prefix" in query:
