@@ -1,0 +1,22 @@
+# Apply with: kubectl apply -k k8s/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+replicas:
+  - name: inventory-app
+    count: 3
+
+images:
+  - name: inventory-app
+    # Placeholder - replace with the real ECR repository URL output by
+    # `terraform output ecr_repository_url`. Prefer pinning to a digest
+    # (newTag: "@sha256:...") or an immutable release tag over "latest".
+    newName: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/inventory-app
+    newTag: stable
+
+patches:
+  - path: patch-app.yaml
+  - path: patch-hpa.yaml

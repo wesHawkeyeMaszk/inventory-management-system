@@ -1,0 +1,8 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inventory-app-hpa
+  namespace: inventory
+spec:
+  minReplicas: 3
+  maxReplicas: 20

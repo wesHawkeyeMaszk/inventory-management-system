@@ -1,0 +1,96 @@
+version: "3.9"
+
+# MONGO_ROOT_PASSWORD / REDIS_PASSWORD default to a fixed dev-only value
+# below so `docker compose up` keeps working with zero setup - override
+# either via a shell export or a .env file for anything longer-lived than
+# a disposable local stack. This is the compose equivalent of the
+# Secret-gated, off-by-default auth in k8s/base/mongodb/statefulset.yaml
+# and k8s/base/redis/deployment.yaml; compose just has no clean way to
+# make a whole service's auth conditionally-on the way an optional k8s
+# Secret does, so it's always-on here instead, with a swappable password.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: inventory-mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-devpassword}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: [
+        "CMD", "mongosh",
+        "--username", "${MONGO_ROOT_USERNAME:-admin}",
+        "--password", "${MONGO_ROOT_PASSWORD:-devpassword}",
+        "--authenticationDatabase", "admin",
+        "--eval", "db.adminCommand('ping')",
+      ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: inventory-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: inventory-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-devpassword}"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-devpassword}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: inventory-app
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/inventory
+      - MONGO_USERNAME=${MONGO_ROOT_USERNAME:-admin}
+      - MONGO_PASSWORD=${MONGO_ROOT_PASSWORD:-devpassword}
+      - ES_URI=http://elasticsearch:9200
+      - REDIS_URI=redis://redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-devpassword}
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/1
+      - FLASK_ENV=development
+    depends_on:
+      mongo:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: inventory-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
+volumes:
+  mongo_data:
+  es_data:

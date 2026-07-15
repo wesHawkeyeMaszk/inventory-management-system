@@ -1,0 +1,19 @@
+# Headless (clusterIP: None): pairs with mongodb/statefulset.yaml's
+# `serviceName: mongodb` to give the pod a stable DNS identity
+# (mongodb-0.mongodb.inventory.svc.cluster.local), which is what a future
+# multi-member replica set needs to address individual members by. With a
+# single replica, `mongodb` still resolves for the app exactly as before -
+# a headless service returns the pod's IP directly rather than proxying
+# through a virtual ClusterIP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: inventory
+spec:
+  clusterIP: None
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017

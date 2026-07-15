@@ -1,0 +1,15 @@
+# Bounds how many inventory-app pods a voluntary disruption (node drain,
+# cluster upgrade, cluster-autoscaler/Karpenter consolidation) is allowed
+# to take down at once. Without this, a node drain can evict every replica
+# simultaneously if the scheduler happened to co-locate them, regardless of
+# what podAntiAffinity/topologySpreadConstraints prefer at schedule time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inventory-app-pdb
+  namespace: inventory
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: inventory-app

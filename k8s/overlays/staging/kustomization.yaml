@@ -1,0 +1,22 @@
+# A real cluster (EKS or otherwise) pulling from a registry instead of a
+# locally-built image - see terraform/ for the EKS + ECR path this assumes.
+# Apply with: kubectl apply -k k8s/overlays/staging
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+replicas:
+  - name: inventory-app
+    count: 2
+
+images:
+  - name: inventory-app
+    # Placeholder - replace with the real ECR repository URL output by
+    # `terraform output ecr_repository_url`.
+    newName: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/inventory-app
+    newTag: staging
+
+patches:
+  - path: patch-app.yaml

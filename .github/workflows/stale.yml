@@ -1,0 +1,25 @@
+name: Stale Issues & PRs
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # Daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: >
+            This issue has been inactive for 30 days. It will be closed in 7 days
+            unless there is new activity. Feel free to comment if it's still relevant!
+          stale-pr-message: >
+            This PR has been inactive for 30 days. It will be closed in 7 days
+            unless there is new activity. Please rebase and update if you'd like to continue.
+          close-issue-message: "Closing due to inactivity. Please reopen if needed."
+          close-pr-message: "Closing due to inactivity. Please reopen and rebase if needed."
+          days-before-stale: 30
+          days-before-close: 7
+          exempt-issue-labels: "pinned,security,roadmap"
+          exempt-pr-labels: "pinned,do-not-close"

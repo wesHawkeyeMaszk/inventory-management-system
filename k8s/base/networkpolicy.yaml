@@ -1,0 +1,65 @@
+# Mongo, Elasticsearch, and Redis carry no authentication of their own (see
+# README "Security" section) - anything that can reach their ClusterIP can
+# read/write the whole database or flush the cache. These NetworkPolicies
+# are the actual access boundary in the meantime: only pods labeled
+# app: inventory-app may open a connection to any of the three data stores.
+# A CNI that doesn't enforce NetworkPolicy (e.g. minikube's default) makes
+# this inert rather than broken - it's still worth shipping so the policy
+# is correct and takes effect the moment the cluster's CNI supports it
+# (Calico, Cilium, etc., all standard on EKS/GKE).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-allow-app-only
+  namespace: inventory
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: inventory-app
+      ports:
+        - port: 27017
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: elasticsearch-allow-app-only
+  namespace: inventory
+spec:
+  podSelector:
+    matchLabels:
+      app: elasticsearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: inventory-app
+      ports:
+        - port: 9200
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-app-only
+  namespace: inventory
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: inventory-app
+      ports:
+        - port: 6379

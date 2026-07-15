@@ -1,0 +1,14 @@
+# Headless - see the comment in k8s/base/mongodb/service.yaml; same
+# reasoning applies here for a future multi-node Elasticsearch cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: inventory
+spec:
+  clusterIP: None
+  selector:
+    app: elasticsearch
+  ports:
+    - port: 9200
+      targetPort: 9200

@@ -1,0 +1,67 @@
+# A StatefulSet, not a Deployment: Mongo is a stateful workload and needs
+# the stable network identity and ordered, one-at-a-time rolling updates a
+# StatefulSet provides (paired with the headless Service in service.yaml).
+# A Deployment on a ReadWriteOnce PVC - the previous shape here - has
+# neither: a rolling update can try to schedule a replacement pod before
+# the old one releases the volume, and there's no stable per-pod DNS name
+# for a future move to a real multi-node replica set to rely on.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: inventory
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          env:
+            # Unset by default (optional: true) -> Mongo starts with no
+            # auth, exactly matching this project's previous behaviour,
+            # until mongodb-credentials is created - see
+            # secret.example.yaml.tpl in this directory. The mongo image
+            # only initializes these on a fresh, empty data directory, so
+            # enabling this against an already-running unauthenticated
+            # instance needs a new volume, not just a Secret + restart.
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: username
+                  optional: true
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: password
+                  optional: true
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: mongo-storage
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
